@@ -1,0 +1,151 @@
+import React, { useState, useEffect } from 'react';
+import { Award, RotateCcw, Star } from 'lucide-react';
+
+const playSound = (type) => {
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (type === 'correct') {
+      const notes = [523.25, 659.25, 783.99, 1046.50];
+      notes.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.15);
+        gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.15);
+        gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + i * 0.15 + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + i * 0.15 + 0.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.15);
+        osc.stop(ctx.currentTime + i * 0.15 + 0.5);
+      });
+    } else if (type === 'wrong') {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(150, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 1);
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 1);
+    }
+  } catch (e) {}
+};
+
+const questions = [
+  { q: "How many tens in 36?", options: [2, 3, 4, 6, 30, 36], ans: 3 },
+  { q: "How many ones in 24?", options: [2, 4, 6, 8, 20, 24], ans: 4 },
+  { q: "6 tens is?", options: [6, 16, 60, 66, 600, 0], ans: 60 },
+  { q: "Find the difference: 67 - 7 is", options: [60, 75, 16, 30, 70, 7], ans: 60 },
+  { q: "The difference of 70 - 10 is =", options: [50, 60, 70, 80, 90, 40], ans: 60 },
+  { q: "The difference of 90 - 10 is", options: [50, 60, 70, 80, 90, 100], ans: 80 },
+  { q: "Find the sum 53 + 5", options: [50, 56, 58, 59, 60, 85], ans: 58 },
+  { q: "Find the sum 47 + 10", options: [37, 48, 57, 67, 17, 7], ans: 57 },
+  { q: "The sum of 10 + 5", options: [5, 10, 15, 20, 25, 50], ans: 15 },
+  { q: "Lara did her homework at 4 o'clock. Which shows 4 o'clock?", options: ["4:00", "12:00", "4:30", "12:04", "1:04", "4:15"], ans: "4:00" },
+  { q: "28 + 50 =", options: [68, 78, 88, 58, 20, 80], ans: 78 },
+  { q: "31 + 40 =", options: [61, 71, 81, 51, 35, 14], ans: 71 },
+  { q: "17 + 24 =", options: [31, 41, 51, 61, 30, 40], ans: 41 },
+  { q: "25 + 49 =", options: [64, 74, 84, 94, 60, 70], ans: 74 },
+  { q: "45 + 43 =", options: [78, 88, 98, 80, 90, 85], ans: 88 },
+  { q: "50 + 34 =", options: [74, 84, 94, 24, 16, 80], ans: 84 },
+  { q: "35 + 46 =", options: [71, 81, 91, 61, 80, 70], ans: 81 },
+  { q: "57 + 38 =", options: [85, 95, 105, 75, 90, 80], ans: 95 },
+  { q: "46 - 10 =", options: [26, 36, 56, 66, 40, 6], ans: 36 },
+  { q: "82 - 70 =", options: [2, 12, 22, 32, 10, 8], ans: 12 },
+  { q: "57 - 40 =", options: [7, 17, 27, 37, 10, 97], ans: 17 },
+  { q: "57 - 50 =", options: [0, 7, 17, 27, 107, 5], ans: 7 },
+  { q: "Sara reads 24 pages. Then she reads 38 more pages. How many pages does she read in all?", options: [52, 62, 72, 82, 14, 50], ans: 62 },
+  { q: "Students plant 76 flowers in sunshine, 40 in shade. How many fewer in shade?", options: [26, 36, 46, 56, 116, 30], ans: 36 }
+];
+
+const HEX_POINTS = "0,-150 129.9,-75 129.9,75 0,150 -129.9,75 -129.9,-75";
+const THEME_COLORS = { centerFill: '#F89AA8', outerBorders: ['#4AA8D8', '#59A96A', '#C0D23E', '#F29C38', '#D1558F', '#9D78BD'] };
+const outerHexPositions = [{ cx: 629.9, cy: 275 }, { cx: 759.8, cy: 500 }, { cx: 629.9, cy: 725 }, { cx: 370.1, cy: 725 }, { cx: 240.2, cy: 500 }, { cx: 370.1, cy: 275 }];
+
+export default function App() {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [score, setScore] = useState(0);
+  const [isFinished, setIsFinished] = useState(false);
+  const [wrongOptions, setWrongOptions] = useState([]);
+  const [correctOption, setCorrectOption] = useState(null);
+  const [activeWrong, setActiveWrong] = useState(null);
+  const [currentOptions, setCurrentOptions] = useState([]);
+
+  const resetGame = () => {
+    setCurrentIdx(0);
+    setScore(0);
+    setIsFinished(false);
+    setWrongOptions([]);
+    setCorrectOption(null);
+    setActiveWrong(null);
+    setCurrentOptions([...questions[0].options].sort(() => Math.random() - 0.5));
+  };
+
+  useEffect(() => {
+    setCurrentOptions([...questions[currentIdx].options].sort(() => Math.random() - 0.5));
+    setWrongOptions([]);
+    setCorrectOption(null);
+    setActiveWrong(null);
+  }, [currentIdx]);
+
+  const handleOptionClick = (optionIndex, optionValue) => {
+    if (correctOption !== null || activeWrong !== null || wrongOptions.includes(optionIndex)) return; 
+    const isCorrect = optionValue === questions[currentIdx].ans;
+    if (isCorrect) {
+      playSound('correct');
+      setCorrectOption(optionIndex);
+      if (wrongOptions.length === 0) setScore(prev => prev + 1);
+      setTimeout(() => {
+        if (currentIdx + 1 < questions.length) setCurrentIdx(prev => prev + 1);
+        else setIsFinished(true);
+      }, 1000);
+    } else {
+      playSound('wrong');
+      setActiveWrong(optionIndex);
+      setWrongOptions(prev => [...prev, optionIndex]);
+      setTimeout(() => setActiveWrong(null), 1000);
+    }
+  };
+
+  if (isFinished) return (
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6"><div className="bg-white rounded-3xl shadow-xl p-10 max-w-lg w-full text-center space-y-6"><Award size={80} className="text-yellow-400 mx-auto"/><h1 className="text-4xl font-extrabold text-slate-800">Exam Complete!</h1><p className="text-2xl text-slate-600">You scored {score} / {questions.length}</p><button onClick={resetGame} className="w-full py-4 rounded-full text-xl font-bold text-white bg-blue-500 hover:bg-blue-600 transition"><RotateCcw size={24} className="inline mr-2"/> Start Again</button></div></div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-between py-8 px-4">
+      <div className="w-full max-w-5xl flex justify-between items-center bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+        <h1 className="text-xl font-bold text-slate-700">Pre-Exam Grade 1</h1>
+        <p className="text-lg font-bold text-slate-700">Q {currentIdx + 1} / {questions.length} | Score: {score}</p>
+      </div>
+      <svg viewBox="0 0 1000 1000" className="w-full max-w-[800px] aspect-square" style={{ overflow: 'visible' }}>
+        {currentOptions.map((optValue, i) => {
+          const isCorrect = correctOption === i;
+          const isWrong = wrongOptions.includes(i);
+          const isCurrentlyAngry = activeWrong === i;
+          let fill = isCurrentlyAngry ? "#FECACA" : isCorrect ? "#4ADE80" : isWrong ? "#FEE2E2" : "white";
+          let transform = `translate(${outerHexPositions[i].cx}, ${outerHexPositions[i].cy})`;
+          // The "fly away" animation: scaled up and moved way off-screen (y=-1000)
+          if (isCorrect) transform += " scale(2) translate(0, -1000)";
+          
+          return (
+            <g key={i} transform={transform} onClick={() => handleOptionClick(i, optValue)} className="transition-all duration-1000 ease-in-out cursor-pointer" style={{ opacity: isCorrect ? 0 : 1 }}>
+              <polygon points={HEX_POINTS} fill={fill} stroke={THEME_COLORS.outerBorders[i]} strokeWidth="16" />
+              <foreignObject x="-100" y="-100" width="200" height="200"><div className="w-full h-full flex items-center justify-center text-4xl font-bold">{isCurrentlyAngry ? "😡" : optValue}</div></foreignObject>
+            </g>
+          );
+        })}
+        <g transform="translate(500, 500)">
+          <polygon points={HEX_POINTS} fill={THEME_COLORS.centerFill} stroke="white" strokeWidth="12" />
+          <foreignObject x="-130" y="-130" width="260" height="260"><div className="flex flex-col items-center justify-center h-full text-white text-center p-4"><span className="text-2xl font-bold">{questions[currentIdx]?.q}</span></div></foreignObject>
+        </g>
+      </svg>
+    </div>
+  );
+}
